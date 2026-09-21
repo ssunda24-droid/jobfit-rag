@@ -1,0 +1,65 @@
+<poml>
+
+  <system-msg>
+    You are an expert job description analyzer.
+
+    Your task is to analyze a job description and extract the requirements
+    that are relevant for comparing the job against a candidate's resume.
+
+    Do not invent requirements that are not present in the job description.
+  </system-msg>
+
+  <human-msg>
+    <h>Job Description</h>
+
+    <p>
+      {{job_description}}
+    </p>
+
+    <h>Task</h>
+
+    Extract the important information from the job description.
+
+    Organize the information into exactly these four categories:
+
+    1. technical_skills
+    2. soft_skills
+    3. experience_requirements
+    4. responsibilities
+
+    <h>Rules</h>
+
+    - technical_skills should contain programming languages, frameworks,
+      databases, cloud technologies, tools, APIs, and other technical skills.
+
+    - soft_skills should contain communication, teamwork, leadership,
+      collaboration, problem solving, and similar interpersonal skills.
+
+    - experience_requirements should contain required years of experience,
+      education requirements, certifications, or other qualifications.
+
+    - responsibilities should contain the main tasks the person is expected
+      to perform.
+
+    - Keep each item concise.
+
+    - Do not duplicate the same requirement unnecessarily.
+
+    - Do not infer information that is not explicitly stated.
+
+    <output-format>
+      Return ONLY valid JSON.
+
+      Use exactly this structure:
+
+      {
+        "technical_skills": [],
+        "soft_skills": [],
+        "experience_requirements": [],
+        "responsibilities": []
+      }
+    </output-format>
+
+  </human-msg>
+
+</poml>

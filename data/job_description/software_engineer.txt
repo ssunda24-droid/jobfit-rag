@@ -1,0 +1,24 @@
+Software Engineer
+
+We are looking for a Software Engineer to build scalable web applications
+and work closely with cross-functional teams.
+
+Responsibilities:
+
+- Develop and maintain modern frontend applications using React.
+- Build reusable and maintainable TypeScript components.
+- Develop REST APIs and integrate backend services.
+- Write unit and integration tests.
+- Collaborate with engineers, product managers, and designers.
+- Participate in code reviews and Agile development processes.
+
+Requirements:
+
+- 2+ years of software development experience.
+- Strong experience with React and JavaScript.
+- Experience with TypeScript.
+- Experience with Python.
+- Knowledge of REST APIs.
+- Experience with Git and GitHub.
+- Experience with AWS or other cloud platforms.
+- Experience with Docker and containerization.
