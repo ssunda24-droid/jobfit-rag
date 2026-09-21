@@ -287,3 +287,47 @@ The goal of JobFit RAG is to demonstrate how Retrieval-Augmented Generation can 
 * Deterministic scoring
 
 This makes the system easier to understand, test, and extend.
+
+## Example Results
+
+The following is an anonymized example of the requirement-level analysis produced by the system:
+
+| Category        | Job Requirement                                             | Status    |
+| --------------- | ----------------------------------------------------------- | --------- |
+| Technical Skill | React                                                       | SUPPORTED |
+| Technical Skill | JavaScript                                                  | SUPPORTED |
+| Technical Skill | TypeScript                                                  | SUPPORTED |
+| Technical Skill | Python                                                      | SUPPORTED |
+| Technical Skill | REST APIs                                                   | SUPPORTED |
+| Technical Skill | Git                                                         | SUPPORTED |
+| Technical Skill | GitHub                                                      | SUPPORTED |
+| Technical Skill | AWS                                                         | MISSING   |
+| Technical Skill | Docker                                                      | MISSING   |
+| Technical Skill | Containerization                                            | MISSING   |
+| Soft Skill      | Collaboration                                               | SUPPORTED |
+| Soft Skill      | Teamwork                                                    | SUPPORTED |
+| Soft Skill      | Code Review Participation                                   | SUPPORTED |
+| Soft Skill      | Agile Development                                           | SUPPORTED |
+| Experience      | 2+ years of software development experience                 | SUPPORTED |
+| Responsibility  | Develop and maintain frontend applications using React      | SUPPORTED |
+| Responsibility  | Build reusable and maintainable TypeScript components       | PARTIAL   |
+| Responsibility  | Develop REST APIs and integrate backend services            | MISSING   |
+| Responsibility  | Write unit and integration tests                            | SUPPORTED |
+| Responsibility  | Collaborate with engineers, product managers, and designers | PARTIAL   |
+| Responsibility  | Participate in code reviews and Agile development processes | PARTIAL   |
+
+### Example Match Score
+
+```text
+73.8%
+```
+
+The score is calculated programmatically using the following weighting:
+
+```text
+SUPPORTED = 1.0
+PARTIAL   = 0.5
+MISSING   = 0.0
+```
+
+The example demonstrates how the system distinguishes between requirements that are clearly supported by resume evidence, partially supported, or not demonstrated.
