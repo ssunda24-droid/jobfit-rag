@@ -40,5 +40,6 @@ def extract_requirements(job_description: str):
             )
 
     response = llm.invoke(langchain_messages)
+    print("Model response:", repr(response.content))
 
     return json.loads(response.content)

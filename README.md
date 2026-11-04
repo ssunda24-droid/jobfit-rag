@@ -1,333 +1,194 @@
 # JobFit RAG
 
-A RAG-based resume and job description matching assistant that analyzes how well a candidate's resume matches a given job description.
+JobFit compares a resume with a job description and returns an evidence-based match report. It extracts requirements from the job description, finds relevant resume passages, classifies each requirement as **SUPPORTED**, **PARTIAL**, or **MISSING**, and calculates a deterministic match score.
 
-The system extracts job requirements, retrieves relevant evidence from the candidate's resume, classifies each requirement as **SUPPORTED**, **PARTIAL**, or **MISSING**, and calculates an overall match score.
+## Current application architecture
 
-## Features
+The current user interface is a React application. It sends the uploaded PDF and job description to a Python API. The API runs the existing retrieval and analysis pipeline and returns a score and requirement-level results. The Groq API key is used only on the Python backend.
 
-* Extracts text from resume PDFs
-* Splits resume content into searchable chunks
-* Uses semantic search to retrieve relevant resume evidence
-* Analyzes job descriptions using an LLM
-* Categorizes requirements into:
-
-  * Technical Skills
-  * Soft Skills
-  * Experience Requirements
-  * Responsibilities
-* Compares individual job requirements against resume evidence
-* Uses grounded matching to reduce unsupported assumptions
-* Classifies matches as:
-
-  * **SUPPORTED** – The resume clearly demonstrates the requirement
-  * **PARTIAL** – The resume provides related but incomplete evidence
-  * **MISSING** – The resume does not provide supporting evidence
-* Calculates a deterministic job-fit score
-* Uses POML for structured prompt management
-
-## How It Works
-
-The application follows a Retrieval-Augmented Generation (RAG) pipeline:
-
-```text
-Resume PDF
-    │
-    ▼
-PDF Text Extraction
-    │
-    ▼
-Text Chunking
-    │
-    ▼
-Embedding Generation
-    │
-    ▼
-ChromaDB Vector Store
-    │
-    │
-    ├──────────────────────────┐
-    │                          │
-    ▼                          ▼
-Job Description          Resume Evidence
-    │                          │
-    ▼                          │
-Job Requirement Extraction     │
-    │                          │
-    └──────────────┬───────────┘
-                   ▼
-             Match Analysis
-                   │
-                   ▼
-        SUPPORTED / PARTIAL / MISSING
-                   │
-                   ▼
-             Match Score
+```mermaid
+flowchart LR
+    U[User] -->|PDF + job description| R[React + Vite frontend]
+    R -->|POST /api/analyze| A[FastAPI backend]
+    A --> P[PDF text extraction<br/>PyMuPDF]
+    P --> C[Chunk resume text<br/>LangChain]
+    C --> E[Sentence Transformers embeddings]
+    E --> V[Temporary Chroma vector store]
+    A --> J[Extract job requirements<br/>Groq + POML]
+    V --> Q[Retrieve resume evidence]
+    J --> M[Compare requirements with evidence<br/>Groq + POML]
+    Q --> M
+    M --> S[Calculate match score]
+    S -->|JSON results| R
 ```
 
-## Tech Stack
+Each API request creates its Chroma store in temporary storage, then removes it when the analysis finishes. The backend accepts text-based PDF files up to 10 MB. The Vite development server proxies `/api` requests to the local FastAPI server.
 
-* **Python 3.12**
-* **LangChain** – LLM and RAG orchestration
-* **Groq** – LLM inference
-* **ChromaDB** – Vector database
-* **Hugging Face Sentence Transformers** – Text embeddings
-* **PyMuPDF** – PDF text extraction
-* **POML** – Prompt management
-* **python-dotenv** – Environment variable management
+## RAG pipeline
 
-## Project Structure
+The app uses retrieval-augmented generation (RAG) to ground its comparison in the resume instead of asking the LLM to judge the whole document from memory.
+
+1. **Extract resume text:** PyMuPDF reads text from each page of the uploaded PDF.
+2. **Split into chunks:** LangChain divides the text into overlapping chunks (1,500 characters with 300 characters of overlap) so relevant details can be found in context.
+3. **Embed and index:** Sentence Transformers converts the chunks into vectors. Chroma stores those vectors for the duration of the request.
+4. **Extract job requirements:** The job description is sent to the Groq LLM with the POML job analyzer prompt. Requirements are returned in four groups: technical skills, soft skills, experience requirements, and responsibilities.
+5. **Retrieve resume evidence:** For each requirement, the app searches Chroma for the three most relevant resume chunks. Experience requirements use the full resume text because dates and career history need broader context.
+6. **Analyze each match:** The Groq LLM receives one requirement and its resume evidence with the POML match analyzer prompt. It classifies the match as `SUPPORTED`, `PARTIAL`, or `MISSING` and explains its decision.
+7. **Calculate the score:** Python assigns 1 point to `SUPPORTED`, 0.5 to `PARTIAL`, and 0 to `MISSING`, then converts the total to a percentage.
+
+The temporary index is discarded after the response is produced; resume chunks are not kept in a persistent vector database by this API.
+
+## Technology
+
+- **Frontend:** React, Vite, and Lucide icons
+- **API:** FastAPI and Uvicorn
+- **LLM:** Groq through LangChain
+- **Prompts:** POML
+- **PDF extraction:** PyMuPDF
+- **Chunking and retrieval:** LangChain and ChromaDB
+- **Embeddings:** Hugging Face Sentence Transformers (`all-MiniLM-L6-v2`)
+- **Scoring:** deterministic Python calculation
+
+## Project structure
 
 ```text
 jobfit_rag/
-│
-├── app.py
-├── requirements.txt
-├── README.md
-├── .env
-├── .gitignore
-│
-├── data/
-│   ├── resume.pdf
-│   └── job_description/
-│       └── software_engineer.txt
-│
+├── backend/
+│   └── main.py                 # FastAPI endpoints and analysis orchestration
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx             # React upload flow and results report
+│   │   ├── main.jsx
+│   │   └── styles.css
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
 ├── src/
-│   ├── ingestion/
-│   │   ├── pdf_loader.py
-│   │   └── chunker.py
-│   │
-│   ├── retrieval/
-│   │   ├── vector_store.py
-│   │   └── retriever.py
-│   │
 │   ├── analysis/
 │   │   ├── job_analyzer.py
 │   │   ├── match_analyzer.py
 │   │   └── match_pipeline.py
-│   │
+│   ├── ingestion/
+│   │   ├── chunker.py
+│   │   └── pdf_loader.py
 │   ├── prompts/
 │   │   ├── job_analyzer.poml
 │   │   └── match_analyzer.poml
-│   │
-│   └── evaluation/
-│       ├── evaluator.py
-│       └── metrics.py
-│
-└── tests/
-    ├── test_retrieval.py
-    └── test_scoring.py
+│   └── retrieval/
+│       ├── retriever.py
+│       └── vector_store.py
+├── requirements.txt
+└── README.md
 ```
 
-## Setup
+`app.py` is the earlier Streamlit interface. The React application does not use it; start the FastAPI backend and Vite frontend instead.
 
-### 1. Clone the repository
+## Run locally
 
-```bash
-git clone https://github.com/YOUR_USERNAME/jobfit-rag.git
-cd jobfit-rag
-```
+### 1. Configure the Groq API key
 
-### 2. Create and activate a virtual environment
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure environment variables
-
-Create a `.env` file:
+Create or update a `.env` file in the project root:
 
 ```env
 GROQ_API_KEY=your_groq_api_key
 ```
 
-The `.env` file should **never be committed to GitHub**.
+Keep `.env` private and do not commit it. If a key was exposed, revoke it and use its replacement here.
 
-## Running the Pipeline
+### 2. Set up Python
 
-Place the resume PDF at:
-
-```text
-data/resume.pdf
-```
-
-Place the job description at:
-
-```text
-data/job_description/software_engineer.txt
-```
-
-Then run:
+Python 3.12 is recommended. From the project root, create and activate a virtual environment, then install the dependencies:
 
 ```bash
-python test_full_pipeline.py
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m ensurepip --upgrade
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-The pipeline will:
+If your `.venv` already exists, activate it and run the `ensurepip` and install commands. `ensurepip` restores pip if the environment was created without it.
 
-1. Load the job description
-2. Extract job requirements
-3. Load and chunk the resume
-4. Create a ChromaDB vector store
-5. Retrieve relevant resume evidence
-6. Analyze each requirement
-7. Assign a match status
-8. Calculate the overall match score
+### 3. Start the API
 
-Example output:
+In a terminal at the project root:
 
-```text
-========================================
-        JOB FIT ANALYSIS
-========================================
-
-----------------------------------------
-Category: technical_skills
-Requirement: React
-Status: SUPPORTED
-Explanation: The resume demonstrates professional experience developing React applications.
-
-----------------------------------------
-Category: technical_skills
-Requirement: Docker
-Status: MISSING
-Explanation: The provided resume evidence does not demonstrate Docker experience.
-
-========================================
-        MATCH SCORE: 63.0%
-========================================
+```bash
+source .venv/bin/activate
+uvicorn backend.main:app --reload
 ```
 
-## Match Scoring
+The API runs at `http://localhost:8000`. Check that it is available by opening `http://localhost:8000/api/health`; it should return:
 
-The match score is calculated programmatically rather than generated by the LLM.
+```json
+{"status":"ok"}
+```
 
-The scoring rules are:
+Interactive API documentation is available at `http://localhost:8000/docs`.
+
+### 4. Start the React frontend
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite, usually `http://localhost:5173`. Keep both terminals running. Upload a PDF resume, paste a job description, and choose **Analyze my fit**. Analysis can take a minute, especially the first time while the embedding model is downloaded.
+
+## API
+
+### `GET /api/health`
+
+Returns a simple health status for the backend.
+
+### `POST /api/analyze`
+
+Accepts `multipart/form-data` with these fields:
+
+- `resume`: PDF file, up to 10 MB
+- `job_description`: job description text
+
+Returns a JSON object with `score` and `results`. Each result includes its category, requirement, match status, explanation, and retrieved resume evidence. Detailed server errors are written to the API terminal; the browser receives a generic error message.
+
+## Deploy
+
+Deploy the React app and Python API as separate services:
+
+1. Create a Vercel project with `frontend/` as its project root.
+2. Set the Vercel environment variable `VITE_API_URL` to the deployed API's base URL, for example `https://your-api.example.com`. Redeploy the frontend after changing it.
+3. Deploy the Python API from the repository root on a Python-friendly web service. Use this start command:
+
+   ```bash
+   uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+   ```
+
+4. Set `GROQ_API_KEY` on the API service. Set `FRONTEND_ORIGIN` to the full Vercel origin, for example `https://your-app.vercel.app`, so the API permits browser requests from the frontend.
+
+Do not put provider keys in the frontend or in `VITE_*` variables. The backend downloads the embedding model and makes LLM requests, so select a Python host with enough memory and request duration for those operations.
+
+## Matching and score
+
+For each extracted job requirement, the system retrieves relevant resume text and asks the LLM to compare the evidence with the requirement. The prompts instruct the model to rely on the supplied evidence and not invent experience.
+
+The score is calculated in Python:
 
 ```text
 SUPPORTED = 1 point
 PARTIAL   = 0.5 points
 MISSING   = 0 points
+
+Score = (SUPPORTED + 0.5 × PARTIAL) / Total requirements × 100
 ```
 
-The final score is:
+The score is a summary of the analyzed requirements, not a hiring decision. A missing match may mean the experience is absent from the resume or simply not stated clearly.
 
-```text
-(SUPPORTED + 0.5 × PARTIAL) / Total Requirements × 100
-```
+## Limitations
 
-This keeps the score deterministic and makes it independent of the LLM's wording.
-
-## Grounding and Hallucination Prevention
-
-The matching system is designed to make decisions only from retrieved resume evidence.
-
-For example, if a job requires:
-
-```text
-TypeScript
-```
-
-and the resume evidence only demonstrates:
-
-```text
-JavaScript
-```
-
-the system should not automatically assume that the candidate has TypeScript experience.
-
-The matching prompt explicitly instructs the model:
-
-* Use only the provided resume evidence
-* Do not invent experience
-* Do not treat similar technologies as identical
-* Use `PARTIAL` when evidence is related but incomplete
-* Use `MISSING` when the requirement is not demonstrated
-
-## Current Limitations
-
-* Resume parsing currently focuses on text-based PDF files.
-* Semantic retrieval quality depends on chunking and embedding quality.
-* LLM responses can occasionally vary between runs.
-* Job requirement extraction may require prompt refinement for complex requirements.
-* API rate limits can affect large analysis runs.
-* The current command-line pipeline is being developed before the Streamlit interface.
-
-## Future Improvements
-
-Planned improvements include:
-
-* Streamlit user interface
-* Resume and job description upload
-* Improved job requirement extraction
-* Better evidence retrieval
-* Evaluation dataset and automated metrics
-* LLM-based evaluation
-* Requirement-level evidence highlighting
-* Improved handling of overlapping resume chunks
-* Visualization of job-fit results
-* Support for multiple job descriptions
-* Exportable analysis reports
-
-## Project Goal
-
-The goal of JobFit RAG is to demonstrate how Retrieval-Augmented Generation can be used to perform **grounded resume-to-job matching** while separating:
-
-* Information extraction
-* Semantic retrieval
-* LLM-based reasoning
-* Deterministic scoring
-
-This makes the system easier to understand, test, and extend.
-
-## Example Results
-
-The following is an anonymized example of the requirement-level analysis produced by the system:
-
-| Category        | Job Requirement                                             | Status    |
-| --------------- | ----------------------------------------------------------- | --------- |
-| Technical Skill | React                                                       | SUPPORTED |
-| Technical Skill | JavaScript                                                  | SUPPORTED |
-| Technical Skill | TypeScript                                                  | SUPPORTED |
-| Technical Skill | Python                                                      | SUPPORTED |
-| Technical Skill | REST APIs                                                   | SUPPORTED |
-| Technical Skill | Git                                                         | SUPPORTED |
-| Technical Skill | GitHub                                                      | SUPPORTED |
-| Technical Skill | AWS                                                         | MISSING   |
-| Technical Skill | Docker                                                      | MISSING   |
-| Technical Skill | Containerization                                            | MISSING   |
-| Soft Skill      | Collaboration                                               | SUPPORTED |
-| Soft Skill      | Teamwork                                                    | SUPPORTED |
-| Soft Skill      | Code Review Participation                                   | SUPPORTED |
-| Soft Skill      | Agile Development                                           | SUPPORTED |
-| Experience      | 2+ years of software development experience                 | SUPPORTED |
-| Responsibility  | Develop and maintain frontend applications using React      | SUPPORTED |
-| Responsibility  | Build reusable and maintainable TypeScript components       | PARTIAL   |
-| Responsibility  | Develop REST APIs and integrate backend services            | MISSING   |
-| Responsibility  | Write unit and integration tests                            | SUPPORTED |
-| Responsibility  | Collaborate with engineers, product managers, and designers | PARTIAL   |
-| Responsibility  | Participate in code reviews and Agile development processes | PARTIAL   |
-
-### Example Match Score
-
-```text
-73.8%
-```
-
-The score is calculated programmatically using the following weighting:
-
-```text
-SUPPORTED = 1.0
-PARTIAL   = 0.5
-MISSING   = 0.0
-```
-
-The example demonstrates how the system distinguishes between requirements that are clearly supported by resume evidence, partially supported, or not demonstrated.
+- Resume extraction currently expects text-based PDFs; scanned documents may not contain extractable text.
+- Analysis quality depends on the wording of the job description, resume, prompts, and retrieved passages.
+- Large jobs with many requirements can take longer and use more LLM API calls.
+- The first analysis may take longer while the embedding model downloads.
+- The local Streamlit interface in `app.py` is retained as an earlier version; it is not part of the React/FastAPI flow.

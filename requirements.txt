@@ -10,3 +10,6 @@ streamlit
 python-dotenv
 pydantic
 poml
+fastapi
+uvicorn[standard]
+python-multipart
