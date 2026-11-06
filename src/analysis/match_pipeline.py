@@ -1,5 +1,3 @@
-import time
-
 from src.retrieval.retriever import retrieve_resume_evidence
 from src.analysis.match_analyzer import analyze_match
 
@@ -36,8 +34,6 @@ def analyze_requirements(requirements, vector_store, resume_documents):
                 requirement=requirement,
                 resume_evidence=resume_evidence
             )
-
-            time.sleep(3)
 
             results.append({
                 "category": category,
