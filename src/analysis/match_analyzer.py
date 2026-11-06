@@ -4,6 +4,7 @@ import poml
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
+from src.analysis.llm_retry import invoke_with_rate_limit_retry
 
 load_dotenv()
 
@@ -42,6 +43,6 @@ def analyze_match(requirement: str, resume_evidence: str):
                 HumanMessage(content=message["content"])
             )
 
-    response = llm.invoke(langchain_messages)
+    response = invoke_with_rate_limit_retry(llm, langchain_messages)
 
     return json.loads(response.content)

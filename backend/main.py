@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from groq import RateLimitError
 
 from src.analysis.job_analyzer import extract_requirements
 from src.analysis.match_pipeline import analyze_requirements
@@ -74,6 +75,12 @@ def analyze_resume(
         return {"score": score, "results": results}
     except HTTPException:
         raise
+    except RateLimitError as exc:
+        logger.warning("Groq rate limit persisted after retries: %s", exc)
+        raise HTTPException(
+            status_code=429,
+            detail="The AI provider is temporarily at its usage limit. Please wait a minute and try again.",
+        ) from exc
     except Exception as exc:
         # Keep provider and filesystem details out of the public response,
         # while recording the traceback in the API server logs for debugging.

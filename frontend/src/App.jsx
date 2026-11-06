@@ -103,7 +103,7 @@ function App() {
 
           <div className="action-row"><div className="reassurance"><LockKeyhole size={15} /><span>Files are used only to prepare your analysis.</span></div><button className="analyze-button" onClick={analyze} disabled={loading}>{loading ? <><LoaderCircle className="spin" size={17} /> Analyzing your fit...</> : <>Analyze my fit <ArrowRight size={17} /></>}</button></div>
           {error && <div className="error-banner" role="alert">{error}</div>}
-          {loading && <div className="loading-card"><div className="loader-mark"><Sparkles size={20} /></div><div><strong>Putting the pieces together</strong><p>Reading your resume and comparing it with the role. This can take a minute.</p></div><LoaderCircle className="spin loading-spinner" size={19} /></div>}
+          {loading && <div className="loading-card"><div className="loader-mark"><Sparkles size={20} /></div><div><strong>Putting the pieces together</strong><p>Reading your resume and comparing it with the role. Larger jobs may take a few minutes.</p></div><LoaderCircle className="spin loading-spinner" size={19} /></div>}
 
           {analysis && <section id="results" className="results-section">
             <div className="results-title"><div><div className="eyebrow"><span></span> YOUR MATCH REPORT</div><h2>A closer look at your fit</h2><p>Every match is grounded in evidence from the resume you shared.</p></div><button className="reset-button" onClick={() => { setAnalysis(null); setError(""); }}><RotateCcw size={15} /> New analysis</button></div>
