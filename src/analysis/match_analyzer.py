@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.analysis.llm_retry import invoke_with_rate_limit_retry
+from src.analysis.response_formats import MATCH_RESPONSE_FORMAT
 
 load_dotenv()
 
@@ -43,6 +44,13 @@ def analyze_match(requirement: str, resume_evidence: str):
                 HumanMessage(content=message["content"])
             )
 
-    response = invoke_with_rate_limit_retry(llm, langchain_messages)
+    structured_llm = llm.bind(
+        response_format=MATCH_RESPONSE_FORMAT,
+        reasoning_effort="low",
+    )
+    response = invoke_with_rate_limit_retry(structured_llm, langchain_messages)
+
+    if not response.content:
+        raise ValueError("Groq returned an empty match-analysis response.")
 
     return json.loads(response.content)

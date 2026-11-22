@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.analysis.llm_retry import invoke_with_rate_limit_retry
+from src.analysis.response_formats import JOB_REQUIREMENTS_RESPONSE_FORMAT
 
 load_dotenv()
 
@@ -40,6 +41,13 @@ def extract_requirements(job_description: str):
                 HumanMessage(content=message["content"])
             )
 
-    response = invoke_with_rate_limit_retry(llm, langchain_messages)
+    structured_llm = llm.bind(
+        response_format=JOB_REQUIREMENTS_RESPONSE_FORMAT,
+        reasoning_effort="low",
+    )
+    response = invoke_with_rate_limit_retry(structured_llm, langchain_messages)
+
+    if not response.content:
+        raise ValueError("Groq returned an empty job-requirements response.")
 
     return json.loads(response.content)
