@@ -159,7 +159,7 @@ Deploy the React app and Python API as separate services:
 
 1. Create a Vercel project with `frontend/` as its project root.
 2. Set the Vercel environment variable `VITE_API_URL` to the deployed API's base URL, for example `https://your-api.example.com`. Redeploy the frontend after changing it.
-3. Deploy the Python API from the repository root on a Python-friendly web service. Use this start command:
+3. Deploy the Python API from the repository root on a Python-friendly web service. Set the build command to `pip install -r requirements-render.txt` so Render installs the CPU-only PyTorch wheel, then use this start command:
 
    ```bash
    uvicorn backend.main:app --host 0.0.0.0 --port $PORT
