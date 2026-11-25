@@ -1,64 +1,49 @@
+from src.analysis.match_analyzer import analyze_matches
 from src.retrieval.retriever import retrieve_resume_evidence
-from src.analysis.match_analyzer import analyze_match
+
+BATCH_SIZE = 10
 
 
 def analyze_requirements(requirements, vector_store, resume_documents):
-
-    results = []
-
-    for category, items in requirements.items():
-
-        for requirement in items:
-
+    items = []
+    for category, category_requirements in requirements.items():
+        for requirement in category_requirements:
             if category == "experience_requirements":
-
-                # Experience requirements need the full resume
-                # so the model can reason about employment dates.
                 documents = resume_documents
-
             else:
-
-                # Other requirements use semantic retrieval.
-                documents = retrieve_resume_evidence(
-                    vector_store,
-                    requirement,
-                    k=3
-                )
-
-            resume_evidence = "\n\n".join(
-                document.page_content
-                for document in documents
-            )
-
-            match = analyze_match(
-                requirement=requirement,
-                resume_evidence=resume_evidence
-            )
-
-            results.append({
+                documents = retrieve_resume_evidence(vector_store, requirement, k=3)
+            items.append({
                 "category": category,
                 "requirement": requirement,
-                "status": match["status"],
-                "explanation": match["explanation"],
-                "evidence": resume_evidence
+                "chunks": [document.page_content for document in documents],
             })
-                # Calculate deterministic match score
+
+    matches = []
+    for start in range(0, len(items), BATCH_SIZE):
+        batch = items[start : start + BATCH_SIZE]
+        matches.extend(
+            analyze_matches([
+                (item["requirement"], item["chunks"])
+                for item in batch
+            ])
+        )
+
+    results = []
+    for item, match in zip(items, matches):
+        results.append({
+            "category": item["category"],
+            "requirement": item["requirement"],
+            "status": match["status"],
+            "explanation": match["explanation"],
+            "evidence": "\n\n".join(item["chunks"]),
+        })
+
     total_requirements = len(results)
-
-    supported = sum(
-        1 for result in results
-        if result["status"] == "SUPPORTED"
-    )
-
-    partial = sum(
-        1 for result in results
-        if result["status"] == "PARTIAL"
-    )
-
+    supported = sum(result["status"] == "SUPPORTED" for result in results)
+    partial = sum(result["status"] == "PARTIAL" for result in results)
     score = (
         (supported + 0.5 * partial) / total_requirements * 100
-        if total_requirements > 0
+        if total_requirements
         else 0
     )
-
     return results, score

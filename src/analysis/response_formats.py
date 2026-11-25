@@ -41,3 +41,34 @@ MATCH_RESPONSE_FORMAT = {
         },
     },
 }
+
+BATCH_MATCH_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "resume_matches",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "matches": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "status": {
+                                "type": "string",
+                                "enum": ["SUPPORTED", "PARTIAL", "MISSING"],
+                            },
+                            "explanation": {"type": "string"},
+                        },
+                        "required": ["id", "status", "explanation"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["matches"],
+            "additionalProperties": False,
+        },
+    },
+}

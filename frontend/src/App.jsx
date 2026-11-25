@@ -12,6 +12,8 @@ const categories = {
   responsibilities: "Responsibilities",
 };
 
+const ANALYSIS_TIMEOUT_MS = 5 * 60 * 1000;
+
 function App() {
   const [file, setFile] = useState(null);
   const [jobDescription, setJobDescription] = useState("");
@@ -52,16 +54,27 @@ function App() {
     const body = new FormData();
     body.append("resume", file);
     body.append("job_description", jobDescription);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), ANALYSIS_TIMEOUT_MS);
     try {
       const apiBase = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-      const response = await fetch(`${apiBase}/api/analyze`, { method: "POST", body });
+      const response = await fetch(`${apiBase}/api/analyze`, {
+        method: "POST",
+        body,
+        signal: controller.signal,
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Analysis could not be completed.");
       setAnalysis(data);
       window.setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 80);
     } catch (err) {
-      setError(err.message || "Could not reach the analysis server. Check that the API is running.");
+      if (err.name === "AbortError") {
+        setError("Analysis is taking longer than five minutes. Please try again with a shorter job description or resume.");
+      } else {
+        setError(err.message || "Could not reach the analysis server. Check that the API is running.");
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   }
