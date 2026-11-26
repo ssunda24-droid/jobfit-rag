@@ -4,14 +4,14 @@ from src.retrieval.retriever import retrieve_resume_evidence
 BATCH_SIZE = 10
 
 
-def analyze_requirements(requirements, vector_store, resume_documents):
+def analyze_requirements(requirements, keyword_index, resume_documents):
     items = []
     for category, category_requirements in requirements.items():
         for requirement in category_requirements:
             if category == "experience_requirements":
                 documents = resume_documents
             else:
-                documents = retrieve_resume_evidence(vector_store, requirement, k=3)
+                documents = retrieve_resume_evidence(keyword_index, requirement, k=3)
             items.append({
                 "category": category,
                 "requirement": requirement,

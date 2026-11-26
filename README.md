@@ -12,17 +12,16 @@ flowchart LR
     R -->|POST /api/analyze| A[FastAPI backend]
     A --> P[PDF text extraction<br/>PyMuPDF]
     P --> C[Chunk resume text<br/>LangChain]
-    C --> E[Sentence Transformers embeddings]
-    E --> V[Temporary Chroma vector store]
+    C --> E[all-MiniLM-L6-v2 via FastEmbed ONNX + Chroma]
+    E --> Q[Retrieve resume evidence]
     A --> J[Extract job requirements<br/>Groq + POML]
-    V --> Q[Retrieve resume evidence]
     J --> M[Compare requirements with evidence<br/>Groq + POML]
     Q --> M
     M --> S[Calculate match score]
     S -->|JSON results| R
 ```
 
-Each API request creates its Chroma store in temporary storage, then removes it when the analysis finishes. The backend accepts text-based PDF files up to 10 MB. The Vite development server proxies `/api` requests to the local FastAPI server.
+Each API request creates a temporary semantic retrieval index for that resume and discards it when analysis finishes. It uses `all-MiniLM-L6-v2` through FastEmbed's ONNX runtime. The API accepts text-based PDF files up to 10 MB. The Vite development server proxies `/api` requests to the local FastAPI server.
 
 ## RAG pipeline
 
@@ -30,13 +29,19 @@ The app uses retrieval-augmented generation (RAG) to ground its comparison in th
 
 1. **Extract resume text:** PyMuPDF reads text from each page of the uploaded PDF.
 2. **Split into chunks:** LangChain divides the text into overlapping chunks (1,500 characters with 300 characters of overlap) so relevant details can be found in context.
-3. **Embed and index:** Sentence Transformers converts the chunks into vectors. Chroma stores those vectors for the duration of the request.
+3. **Embed and index:** FastEmbed runs `all-MiniLM-L6-v2` using ONNX to turn resume chunks into vectors, which Chroma stores temporarily for retrieval.
 4. **Extract job requirements:** The job description is sent to the Groq LLM with the POML job analyzer prompt. Requirements are returned in four groups: technical skills, soft skills, experience requirements, and responsibilities.
-5. **Retrieve resume evidence:** For each requirement, the app searches Chroma for the three most relevant resume chunks. Experience requirements use the full resume text because dates and career history need broader context.
-6. **Analyze each match:** The Groq LLM receives one requirement and its resume evidence with the POML match analyzer prompt. It classifies the match as `SUPPORTED`, `PARTIAL`, or `MISSING` and explains its decision.
+5. **Retrieve resume evidence:** For each requirement, the app retrieves the three most semantically relevant resume chunks. Experience requirements use the full resume text because dates and career history need broader context.
+6. **Analyze matches:** The Groq LLM receives requirements and their retrieved evidence in batches with the POML match analyzer prompt. It classifies each match as `SUPPORTED`, `PARTIAL`, or `MISSING` and explains its decision.
 7. **Calculate the score:** Python assigns 1 point to `SUPPORTED`, 0.5 to `PARTIAL`, and 0 to `MISSING`, then converts the total to a percentage.
 
-The temporary index is discarded after the response is produced; resume chunks are not kept in a persistent vector database by this API.
+The retrieval index is discarded after the response is produced; resume chunks are not kept in a persistent database by this API. The first request downloads the embedding model.
+
+## Deployment challenge and design choice
+
+The initial deployment used the Hugging Face `all-MiniLM-L6-v2` embedding model with Chroma for semantic retrieval. On Render's 512 MB free instance, loading the PyTorch-based embedding stack during resume analysis exceeded the available memory and caused the service to restart. Increasing the instance memory would require a paid plan.
+
+To keep semantic search without loading PyTorch or adding another API key, the project now uses FastEmbed's ONNX runtime with the same `all-MiniLM-L6-v2` model. This should use less memory, but the 512 MB Render deployment has not yet been verified with this runtime. Groq handles job requirement extraction and resume-match analysis.
 
 ## Technology
 
@@ -45,8 +50,8 @@ The temporary index is discarded after the response is produced; resume chunks a
 - **LLM:** Groq through LangChain
 - **Prompts:** POML
 - **PDF extraction:** PyMuPDF
-- **Chunking and retrieval:** LangChain and ChromaDB
-- **Embeddings:** Hugging Face Sentence Transformers (`all-MiniLM-L6-v2`)
+- **Chunking:** LangChain text splitters
+- **Retrieval:** `all-MiniLM-L6-v2` via FastEmbed/ONNX semantic search
 - **Scoring:** deterministic Python calculation
 
 ## Project structure
@@ -78,6 +83,8 @@ jobfit_rag/
 │       ├── retriever.py
 │       └── vector_store.py
 ├── requirements.txt
+├── requirements-render.txt
+├── requirements-semantic-local.txt
 └── README.md
 ```
 
@@ -104,10 +111,10 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 python -m ensurepip --upgrade
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-semantic-local.txt
 ```
 
-If your `.venv` already exists, activate it and run the `ensurepip` and install commands. `ensurepip` restores pip if the environment was created without it.
+This installs FastEmbed, ONNX Runtime, and Chroma for semantic search. If your `.venv` already exists, activate it and run the `ensurepip` and install commands. `ensurepip` restores pip if the environment was created without it.
 
 ### 3. Start the API
 
@@ -136,7 +143,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite, usually `http://localhost:5173`. Keep both terminals running. Upload a PDF resume, paste a job description, and choose **Analyze my fit**. Analysis can take a minute, especially the first time while the embedding model is downloaded.
+Open the local URL printed by Vite, usually `http://localhost:5173`. Keep both terminals running. Upload a PDF resume, paste a job description, and choose **Analyze my fit**. The first semantic analysis can take longer while FastEmbed downloads the ONNX model.
 
 ## API
 
@@ -159,15 +166,15 @@ Deploy the React app and Python API as separate services:
 
 1. Create a Vercel project with `frontend/` as its project root.
 2. Set the Vercel environment variable `VITE_API_URL` to the deployed API's base URL, for example `https://your-api.example.com`. Redeploy the frontend after changing it.
-3. Deploy the Python API from the repository root on a Python-friendly web service. Set the build command to `pip install -r requirements-render.txt` so Render installs the CPU-only PyTorch wheel, then use this start command:
+3. Deploy the Python API from the repository root on Render. Set the build command to `pip install -r requirements-render.txt`, then use this start command:
 
    ```bash
    uvicorn backend.main:app --host 0.0.0.0 --port $PORT
    ```
 
-4. Set `GROQ_API_KEY` on the API service. Set `FRONTEND_ORIGIN` to the full Vercel origin, for example `https://your-app.vercel.app`, so the API permits browser requests from the frontend.
+4. Set `GROQ_API_KEY` and `FRONTEND_ORIGIN` on the API service. `FRONTEND_ORIGIN` should be the full Vercel origin, for example `https://your-app.vercel.app`, so the API permits browser requests from the frontend.
 
-Do not put provider keys in the frontend or in `VITE_*` variables. The backend downloads the embedding model and makes LLM requests, so select a Python host with enough memory and request duration for those operations.
+Do not put provider keys in the frontend or in `VITE_*` variables. Resume processing stays on the backend, and the ONNX model is downloaded on first use.
 
 ## Matching and score
 

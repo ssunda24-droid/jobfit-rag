@@ -11,7 +11,7 @@ from src.analysis.job_analyzer import extract_requirements
 from src.analysis.match_pipeline import analyze_requirements
 from src.ingestion.chunker import split_text
 from src.ingestion.pdf_loader import load_pdf
-from src.retrieval.vector_store import create_vector_store
+from src.retrieval.vector_store import create_semantic_index
 
 
 app = FastAPI(title="JobFit API")
@@ -61,14 +61,11 @@ def analyze_resume(
                 )
 
             resume_documents = split_text(resume_text)
-            vector_store = create_vector_store(
-                resume_documents,
-                persist_directory=str(Path(temp_dir) / "chroma"),
-            )
+            retrieval_index = create_semantic_index(resume_documents)
             requirements = extract_requirements(job_description.strip())
             results, score = analyze_requirements(
                 requirements,
-                vector_store,
+                retrieval_index,
                 resume_documents,
             )
 
